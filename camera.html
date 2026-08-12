@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Камера</title>
+    <style>
+        body { background: #111; color: #fff; font-family: Arial; text-align: center; padding: 20px; }
+        video { width: 100%; max-width: 500px; border-radius: 12px; background: #000; transform: scaleX(-1); }
+        button { background: #2a6df4; color: #fff; border: none; padding: 12px 30px; border-radius: 30px; font-size: 16px; cursor: pointer; margin: 10px; }
+        button:hover { background: #1a5cd4; }
+        .link { background: #1a1a1a; padding: 12px; border-radius: 8px; word-break: break-all; margin: 15px auto; max-width: 500px; border: 1px solid #333; }
+        .status { padding: 10px; border-radius: 8px; margin: 10px auto; max-width: 400px; }
+        .on { background: #1a3a1a; color: #4caf50; }
+        .off { background: #3a1a1a; color: #f44336; }
+        .wait { background: #3a3a1a; color: #ffc107; }
+    </style>
+</head>
+<body>
+
+    <h2>📷 Камера</h2>
+    <div id="status" class="status wait">⏳ Ожидание запуска</div>
+    <video id="video" autoplay playsinline></video>
+    <br>
+    <button id="startBtn">▶ Включить камеру</button>
+    <button id="snapBtn" disabled>📸 Снимок</button>
+    <button id="stopBtn" disabled>⏹ Остановить</button>
+
+    <div class="link" id="linkArea" style="display:none;">
+        <p>🔗 Ссылка для отправки (скопируйте):</p>
+        <span id="inviteLink">...</span>
+        <br><br>
+        <button id="copyBtn">📋 Копировать</button>
+    </div>
+
+    <div id="log" style="font-size:12px;color:#666;margin-top:20px;"></div>
+
+    <script>
+        // ============================================================
+        // ПРОСТЕЙШИЙ КОД ДЛЯ БЛОКНОТА — ВСЁ В ОДНОМ ФАЙЛЕ
+        // ============================================================
+
+        const video = document.getElementById('video');
+        const statusDiv = document.getElementById('status');
+        const logDiv = document.getElementById('log');
+        const startBtn = document.getElementById('startBtn');
+        const snapBtn = document.getElementById('snapBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const linkArea = document.getElementById('linkArea');
+        const inviteLinkSpan = document.getElementById('inviteLink');
+        const copyBtn = document.getElementById('copyBtn');
+
+        let stream = null;
+        let isRunning = false;
+
+        function log(msg) {
+            logDiv.innerHTML = msg + '<br>' + logDiv.innerHTML;
+        }
+
+        function setStatus(text, type = 'wait') {
+            statusDiv.textContent = text;
+            statusDiv.className = 'status ' + type;
+        }
+
+        // ==================== КАМЕРА ====================
+        async function startCamera() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
+                    audio: false
+                });
+                video.srcObject = stream;
+                isRunning = true;
+                setStatus('🟢 Камера включена', 'on');
+                snapBtn.disabled = false;
+                stopBtn.disabled = false;
+                startBtn.disabled = true;
+                log('✅ Камера запущена');
+                generateLink();
+            } catch (err) {
+                setStatus('❌ Ошибка: ' + err.message, 'off');
+                log('❌ ' + err.message);
+            }
+        }
+
+        function stopCamera() {
+            if (stream) {
+                stream.getTracks().forEach(t => t.stop());
+                stream = null;
+            }
+            video.srcObject = null;
+            isRunning = false;
+            setStatus('⛔ Камера выключена', 'off');
+            snapBtn.disabled = true;
+            stopBtn.disabled = true;
+            startBtn.disabled = false;
+            log('⏹ Камера остановлена');
+        }
+
+        // ==================== СНИМОК ====================
+        function takeSnapshot() {
+            if (!stream) return;
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth || 640;
+            canvas.height = video.videoHeight || 480;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+            
+            // Скачиваем
+            const a = document.createElement('a');
+            a.href = dataUrl;
+            a.download = 'snapshot_' + Date.now() + '.jpg';
+            a.click();
+            log('📸 Снимок сохранён');
+        }
+
+        // ==================== ГЕНЕРАЦИЯ ССЫЛКИ ====================
+        function generateLink() {
+            // Создаём ссылку на ЭТУ ЖЕ страницу с параметром
+            const url = window.location.href.split('?')[0];
+            const room = 'room_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
+            const fullLink = url + '?room=' + room;
+            
+            inviteLinkSpan.textContent = fullLink;
+            linkArea.style.display = 'block';
+            log('🔗 Ссылка сгенерирована');
+        }
+
+        // ==================== КОПИРОВАНИЕ ====================
+        copyBtn.addEventListener('click', () => {
+            const text = inviteLinkSpan.textContent;
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(text).then(() => {
+                    log('📋 Ссылка скопирована');
+                    copyBtn.textContent = '✅ Готово';
+                    setTimeout(() => copyBtn.textContent = '📋 Копировать', 2000);
+                });
+            } else {
+                // fallback
+                const range = document.createRange();
+                range.selectNode(inviteLinkSpan);
+                window.getSelection().removeAllRanges();
+                window.getSelection().addRange(range);
+                document.execCommand('copy');
+                log('📋 Ссылка скопирована (fallback)');
+                copyBtn.textContent = '✅ Готово';
+                setTimeout(() => copyBtn.textContent = '📋 Копировать', 2000);
+            }
+        });
+
+        // ==================== КНОПКИ ====================
+        startBtn.addEventListener('click', startCamera);
+        stopBtn.addEventListener('click', stopCamera);
+        snapBtn.addEventListener('click', takeSnapshot);
+
+        // ==================== АВТОЗАПУСК (если есть параметр room) ====================
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('room')) {
+            log('🔗 Открыто по ссылке с комнатой ' + params.get('room'));
+            // Автоматически включаем камеру через 1 секунду
+            setTimeout(startCamera, 1000);
+        }
+
+        log('📄 Страница загружена. Нажмите "Включить камеру"');
+    </script>
+</body>
+</html>
